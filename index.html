@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>프로그램 신청 (1버전)</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#1f2937;--sub:#6b7280;--line:#e5e7eb;--pri:#4f46e5;--pri2:#eef2ff;--ok:#059669;--okbg:#ecfdf5;--bad:#dc2626;--badbg:#fef2f2;--warn:#b45309;--warnbg:#fffbeb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:15px;line-height:1.5}
+#app{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 12px}h2{font-size:17px;margin:0 0 10px}h3{font-size:15px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grow{flex:1}
+input,select,textarea{font:inherit;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;max-width:100%}
+textarea{width:100%;min-height:110px}
+button{font:inherit;padding:8px 14px;border:1px solid var(--pri);background:var(--pri);color:#fff;border-radius:8px;cursor:pointer}
+button.sec{background:#fff;color:var(--pri)}
+button.dan{background:#fff;color:var(--bad);border-color:var(--bad)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.sm{padding:4px 9px;font-size:13px}
+.banner{border-radius:12px;padding:14px 16px;margin-bottom:14px;font-weight:600}
+.b-on{background:var(--okbg);color:var(--ok);border:1px solid #a7f3d0}
+.b-wait{background:var(--warnbg);color:var(--warn);border:1px solid #fde68a}
+.b-off{background:#f3f4f6;color:var(--sub);border:1px solid var(--line)}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.item{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fafafa}
+.item.mine{border-color:var(--ok);background:var(--okbg)}
+.item.sel{border-color:var(--pri);background:var(--pri2)}
+.item.full{opacity:.55}
+.stat{display:flex;gap:10px;font-size:13px;margin:4px 0 8px;flex-wrap:wrap}
+.stat span{background:#fff;border:1px solid var(--line);border-radius:8px;padding:2px 8px}
+.stat b{color:var(--pri)}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--pri2);color:var(--pri);margin-left:6px}
+.tag.ok{background:var(--okbg);color:var(--ok)}.tag.bad{background:var(--badbg);color:var(--bad)}.tag.warn{background:var(--warnbg);color:var(--warn)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:#f9fafb}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tabs button{background:#fff;color:var(--ink);border-color:var(--line)}
+.tabs button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.muted{color:var(--sub);font-size:13px}
+.mini{font-size:12px}
+.err{color:var(--bad);font-size:14px;min-height:20px}
+.names{font-size:12px;color:var(--sub)}
+.login{max-width:440px;margin:36px auto}
+.res{padding:6px 10px;border-radius:8px;margin-top:6px;font-size:14px}
+.res.ok{background:var(--okbg);color:var(--ok)}.res.bad{background:var(--badbg);color:var(--bad)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* =========================================================
+   프로그램 신청 시스템 — 1버전 (보안 강화)
+   - 링크만 있으면 입장, 학번/이름 직접 입력 (학생은 익명 로그인)
+   - 교사는 구글 로그인 (ADMIN_EMAIL 계정만 설정·추첨·수정 가능)
+   - 차수(1차, 2차…) 신청 → 교사가 [마감] → 자동 무작위 추첨 → 다음 차수
+   - 학생 화면에는 항목별 신청 인원(숫자)과 '내 결과'만 보임 (다른 학생 정보는 안 보임)
+   - 파일을 그냥 열면(file://) Firebase 없이 '연습 모드'로 동작
+   ========================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD-ZvGW6vIKZPQeSVnTBxIvXyv-MCnaEo0",
+  authDomain: "program-select.firebaseapp.com",
+  databaseURL: "https://program-select-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "program-select",
+  storageBucket: "program-select.firebasestorage.app",
+  messagingSenderId: "27421754864",
+  appId: "1:27421754864:web:da3b040080f4d58089c935"
+};
+const ADMIN_EMAIL = 'guhwan4@naver.com';   // 보안 규칙(database.rules.json)의 이메일과 같아야 합니다
+
+/* ---------- 유틸 ---------- */
+const $ = s => document.querySelector(s);
+const arr = x => !x ? [] : Array.isArray(x) ? x.filter(v => v != null) : Object.values(x);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = p => p + Math.random().toString(36).slice(2, 8);
+const clone = o => o == null ? o : JSON.parse(JSON.stringify(o));
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const sameName = (a, b) => String(a).replace(/\s+/g, '') === String(b).replace(/\s+/g, '');
+const fmtTime = ms => { const d = new Date(ms), p = n => String(n).padStart(2, '0'); return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+function authErrMsg(e){
+  const c = (e && e.code) || '';
+  if (c === 'auth/unauthorized-domain') return '이 주소(' + location.hostname + ')가 Firebase 승인 도메인에 없습니다. Authentication → 설정 → 승인된 도메인에 추가하세요.';
+  if (c === 'auth/operation-not-allowed' || c === 'auth/admin-restricted-operation') return 'Firebase Authentication에서 해당 로그인 방법(구글/익명)이 꺼져 있습니다.';
+  if (c === 'auth/popup-blocked') return '팝업이 차단되었습니다. 팝업을 허용하고 다시 시도하세요.';
+  if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return '로그인 창이 닫혔습니다.';
+  if (c === 'auth/operation-not-supported-in-this-environment') return '이 환경(file://)에서는 로그인을 쓸 수 없습니다. 올려둔 주소로 접속하세요.';
+  return '로그인 오류: ' + (c || (e && e.message) || e);
+}
+
+/* ---------- DB 어댑터 (Firebase / 연습 모드) ---------- */
+const DB = (() => {
+  let mode = 'local', fb = null, au = null;
+  const LKEY = 'sel_v1_db', listeners = [];
+  const lload = () => { try { return JSON.parse(localStorage.getItem(LKEY)) || {}; } catch(e){ return {}; } };
+  const getp = (t, p) => p.split('/').filter(Boolean).reduce((o, k) => o == null ? null : o[k], t);
+  function setp(t, p, v){
+    const ks = p.split('/').filter(Boolean); let o = t;
+    for (let i = 0; i < ks.length - 1; i++){ if (o[ks[i]] == null || typeof o[ks[i]] !== 'object') o[ks[i]] = {}; o = o[ks[i]]; }
+    const last = ks[ks.length - 1];
+    if (v === null || v === undefined) delete o[last]; else o[last] = v;
+  }
+  const fire = () => { const t = lload(); listeners.forEach(l => l.cb(clone(getp(t, l.path)))); };
+  const lsave = t => { localStorage.setItem(LKEY, JSON.stringify(t)); fire(); };
+  window.addEventListener('storage', e => { if (e.key === LKEY) fire(); });
+  return {
+    get mode(){ return mode; },
+    init(cfg){
+      if (cfg && cfg.apiKey && cfg.databaseURL && typeof firebase !== 'undefined' && typeof firebase.auth === 'function'){
+        try { if (!firebase.apps.length) firebase.initializeApp(cfg); fb = firebase.database(); au = firebase.auth(); mode = 'firebase'; }
+        catch(e){ console.error(e); mode = 'local'; }
+      }
+      return mode;
+    },
+    now: () => Date.now(),
+    /* 인증 */
+    authReady(){ if (mode !== 'firebase') return Promise.resolve(null); return new Promise(res => { const u = au.onAuthStateChanged(x => { u(); res(x); }); }); },
+    user(){ return mode === 'firebase' ? au.currentUser : null; },
+    uid(){ return mode === 'firebase' ? (au.currentUser && au.currentUser.uid) : 'local'; },
+    async signInAnon(){ if (mode === 'firebase' && !au.currentUser) await au.signInAnonymously(); },
+    async signInGoogle(){ const r = await au.signInWithPopup(new firebase.auth.GoogleAuthProvider()); return r.user; },
+    async signOut(){ if (mode === 'firebase') await au.signOut(); },
+    /* 데이터 */
+    async get(p){ if (mode === 'firebase') return (await fb.ref(p).get()).val(); return clone(getp(lload(), p)); },
+    async set(p, v){ if (mode === 'firebase') return fb.ref(p).set(v === undefined ? null : v); const t = lload(); setp(t, p, v); lsave(t); },
+    async update(base, obj){
+      if (mode === 'firebase') return fb.ref(base).update(obj);
+      const t = lload(); for (const k in obj) setp(t, base + '/' + k, obj[k]); lsave(t);
+    },
+    async tx(p, fn){
+      if (mode === 'firebase'){
+        const r = await fb.ref(p).transaction(c => fn(clone(c)));
+        return { committed: r.committed, value: r.snapshot.val() };
+      }
+      const t = lload(); const cur = clone(getp(t, p)); const nv = fn(cur);
+      if (nv === undefined) return { committed: false, value: cur };
+      setp(t, p, nv); lsave(t); return { committed: true, value: nv };
+    },
+    on(p, cb, eb){
+      if (mode === 'firebase'){
+        const r = fb.ref(p);
+        const h = r.on('value', s => cb(s.val()), e => { console.warn('읽기 거부:', p, e && e.code); if (eb) eb(e); });
+        return () => r.off('value', h);
+      }
+      const l = { path: p, cb }; listeners.push(l); cb(clone(getp(lload(), p)));
+      return () => { const i = listeners.indexOf(l); if (i >= 0) listeners.splice(i, 1); };
+    }
+  };
+})();
+
+/* ---------- 상태 ---------- */
+const S = { cfg: null, assign: {}, state: {}, counts: {}, taken: {}, myResult: {}, log: {}, students: {}, apps: {}, myApps: {}, prevApps: {}, me: null, admin: false, tab: 'status', view: 'entry', msg: '', D: null, q: '' };
+let subs = [], roundSubs = {}, roundKey = '', kickedOnce = false;
+
+function defaultConfig(){
+  const it = (n, c) => ({ id: uid('i'), name: n, cap: c });
+  return { title: '프로그램 신청', sectors: [
+    { id: uid('s'), name: '1섹터', items: [it('항목 A', 3), it('항목 B', 3), it('항목 C', 2)] },
+    { id: uid('s'), name: '2섹터', items: [it('항목 D', 3), it('항목 E', 2)] } ] };
+}
+const sectors = () => arr(S.cfg && S.cfg.sectors).map(s => ({ ...s, items: arr(s.items) }));
+const curRound = () => Number(S.state.cur) || 1;
+const members = (sid, iid) => Object.keys((S.assign[sid] || {})[iid] || {});                        // 교사 전용 (assign 전체)
+const takenN = (sid, iid) => S.admin ? members(sid, iid).length : (((S.taken || {})[sid] || {})[iid] || 0);  // 학생은 인원수만
+function findItem(sid, iid){ const s = sectors().find(x => x.id === sid); return s && s.items.find(i => i.id === iid); }
+function myItem(sid, id){
+  if (!S.admin) return ((S.myResult || {})[sid]) || null;     // 학생은 자기 결과만 가짐
+  const a = S.assign[sid] || {}; for (const iid in a) if (a[iid] && a[iid][id]) return iid; return null;
+}
+const free = (sid, it) => Math.max(0, Number(it.cap) - takenN(sid, it.id));
+const nameOf = id => (S.students[id] && S.students[id].name) || id;
+
+/* ---------- 배정 (교사만 실행) ---------- */
+async function assignTx(sid, iid, id, force){
+  const it = findItem(sid, iid); if (!it) return { ok: false, reason: 'noitem' };
+  let reason = null;
+  const r = await DB.tx('assign/' + sid, cur => {
+    cur = cur || {}; reason = null;
+    for (const k in cur) if (cur[k] && cur[k][id]){ reason = 'already'; return; }
+    const m = cur[iid] || {};
+    if (!force && Object.keys(m).length >= Number(it.cap)){ reason = 'full'; return; }
+    m[id] = DB.now(); cur[iid] = m; return cur;
+  });
+  return r.committed ? { ok: true } : { ok: false, reason: reason || 'full' };
+}
+async function unassign(sid, id){
+  await DB.tx('assign/' + sid, cur => { cur = cur || {}; for (const k in cur) if (cur[k]) delete cur[k][id]; return cur; });
+}
+/* 학생에게 공개되는 요약본: 항목별 인원수(taken) + 학생별 자기 결과(result) — assign 변경 뒤에 호출 */
+async function publish(){
+  const assign = (await DB.get('assign')) || {}, taken = {}, result = {};
+  for (const sid in assign) for (const iid in (assign[sid] || {})){
+    const ids = Object.keys(assign[sid][iid] || {}); if (!ids.length) continue;
+    (taken[sid] = taken[sid] || {})[iid] = ids.length;
+    ids.forEach(id => { (result[id] = result[id] || {})[sid] = iid; });
+  }
+  await DB.set('taken', Object.keys(taken).length ? taken : null);
+  await DB.set('result', Object.keys(result).length ? result : null);
+}
+const cntPath = (r, sid, iid) => `counts/${r}/${sid}/${iid}`;
+async function recomputeCounts(r){
+  const apps = (await DB.get('apps/' + r)) || {}, studs = (await DB.get('students')) || {}, c = {};
+  for (const id in apps){ if (!studs[id]) continue; const v = apps[id] || {}; for (const sid in v){ c[sid] = c[sid] || {}; c[sid][v[sid]] = (c[sid][v[sid]] || 0) + 1; } }
+  await DB.set('counts/' + r, Object.keys(c).length ? c : null);
+}
+const setCur = r => DB.update('state', { cur: r, ck: String(r) });
+
+/* ---------- 신청 / 취소 ---------- */
+async function applyFor(id, sid, iid, cancel){
+  const r = curRound();
+  if (S.state.locked) return { ok: false, msg: '추첨 처리 중입니다. 잠시 후 다시 시도하세요.' };
+  if (S.state.ended) return { ok: false, msg: '신청이 종료되었습니다.' };
+  if (!cancel){
+    if (myItem(sid, id)) return { ok: false, msg: '이미 이 섹터는 배정되었습니다.' };
+    const it = findItem(sid, iid); if (!it) return { ok: false, msg: '없는 항목입니다.' };
+    if (free(sid, it) <= 0) return { ok: false, msg: '정원이 모두 찬 항목입니다.' };
+  }
+  const path = `apps/${r}/${id}/${sid}`;
+  try {
+    const old = await DB.get(path);
+    if (!cancel && old === iid) return { ok: true };
+    if (cancel && !old) return { ok: true };
+    if (old) await DB.tx(cntPath(r, sid, old), c => Math.max(0, (c || 0) - 1) || null);
+    if (cancel){ await DB.set(path, null); return { ok: true }; }
+    await DB.set(path, iid);
+    await DB.tx(cntPath(r, sid, iid), c => (c || 0) + 1);
+    return { ok: true };
+  } catch(e){
+    console.warn(e);
+    return { ok: false, msg: (e && e.code === 'PERMISSION_DENIED') ? '지금은 신청할 수 없습니다. (마감되었거나 처리 중입니다) 화면을 새로고침해 보세요.' : '신청 중 오류가 났습니다. 잠시 후 다시 시도하세요.' };
+  }
+}
+
+/* ---------- 마감 + 자동 추첨 (교사) ---------- */
+async function closeRound(){
+  const r = curRound();
+  if (!confirm(`${r}차를 마감하고 무작위 추첨을 실행합니다.\n\n정원 이하인 항목은 신청자 전원이 확정되고, 정원을 넘는 항목은 무작위로 뽑힙니다.\n계속할까요?`)) return;
+  const c = await DB.tx('state/locked', x => x ? undefined : true);
+  if (!c.committed) return alert('이미 처리 중입니다. 잠겨 있다면 [잠금 해제]를 눌러주세요.');
+  try {
+    const apps = (await DB.get('apps/' + r)) || {}, studs = (await DB.get('students')) || {}, assign = (await DB.get('assign')) || {};
+    const groups = {};
+    for (const id in apps){
+      if (!studs[id]) continue; const v = apps[id] || {};
+      for (const sid in v){
+        if (assign[sid] && Object.values(assign[sid]).some(m => m && m[id])) continue;
+        (groups[sid + '|' + v[sid]] = groups[sid + '|' + v[sid]] || []).push(id);
+      }
+    }
+    const rows = [], winners = [];
+    for (const g in groups){
+      const [sid, iid] = g.split('|'); const it = findItem(sid, iid); if (!it) continue;
+      const have = Object.keys(((assign[sid] || {})[iid]) || {}).length;
+      const fr = Math.max(0, Number(it.cap) - have), list = groups[g];
+      const sh = shuffle(list); const win = sh.slice(0, fr), lose = sh.slice(fr), ok = [];
+      for (const id of win){ const x = await assignTx(sid, iid, id); if (x.ok){ ok.push(id); winners.push({ sid, iid, id }); } else lose.push(id); }
+      rows.push({ sid, iid, item: it.name, applicants: list.length, cap: it.cap, free: fr, win: ok.map(i => studs[i].name + '(' + i + ')'), lose: lose.map(i => studs[i].name + '(' + i + ')') });
+    }
+    await DB.set('log/' + r, { time: Date.now(), rows, winners });
+    await publish();
+    await setCur(r + 1);
+  } catch(e){ console.error(e); alert('추첨 중 오류: ' + e.message); }
+  finally { await DB.set('state/locked', null); }
+}
+async function undoRound(){
+  const r = curRound() - 1; if (r < 1) return alert('취소할 마감이 없습니다.');
+  const log = (S.log || {})[r]; if (!log) return alert('마감 기록이 없습니다.');
+  if (!confirm(`${r}차 마감을 취소합니다.\n${r}차 추첨으로 확정된 배정이 모두 풀리고, ${r}차 신청이 다시 열립니다. 계속할까요?`)) return;
+  await DB.set('state/locked', true);
+  try {
+    for (const w of arr(log.winners)) await unassign(w.sid, w.id);
+    await DB.set('apps/' + (r + 1), null); await DB.set('counts/' + (r + 1), null);
+    await DB.set('log/' + r, null); await DB.set('state/ended', null);
+    await recomputeCounts(r); await publish(); await setCur(r);
+  } finally { await DB.set('state/locked', null); }
+}
+
+/* ---------- 구독 ---------- */
+function stopSubs(){ subs.forEach(u => u()); subs = []; Object.values(roundSubs).forEach(u => u()); roundSubs = {}; roundKey = ''; }
+function startSubs(){
+  stopSubs();
+  subs.push(DB.on('config', v => { S.cfg = v; onData(); }));
+  if (S.admin){
+    subs.push(DB.on('assign', v => { S.assign = v || {}; onData(); }));
+    subs.push(DB.on('state', v => { S.state = v || {}; onData(); }));
+    subs.push(DB.on('students', v => { S.students = v || {}; onData(); }));
+    subs.push(DB.on('apps', v => { S.apps = v || {}; onData(); }));
+    subs.push(DB.on('log', v => { S.log = v || {}; onData(); }));
+  } else if (S.me){
+    S.state = {}; S.taken = {}; S.myResult = {}; S.assign = {}; S.students = {}; S.apps = {}; S.log = {};
+    subs.push(DB.on('taken', v => { S.taken = v || {}; onData(); }));
+    ['cur', 'locked', 'ended'].forEach(k => subs.push(DB.on('state/' + k, v => {
+      if (v == null) delete S.state[k]; else S.state[k] = v;
+      if (k === 'cur') ensureRoundSubs();
+      onData();
+    })));
+    subs.push(DB.on('result/' + S.me.id, v => { S.myResult = v || {}; onData(); }));
+    subs.push(DB.on('students/' + S.me.id, v => { if (!v) kicked(); else { S.me = { id: v.id, name: v.name }; onData(); } }, () => kicked()));
+    ensureRoundSubs();
+  }
+}
+function kicked(){
+  if (kickedOnce || S.view !== 'student') return; kickedOnce = true;
+  alert('교사가 학생 정보를 바꾸거나 삭제했습니다. 다시 입장해주세요.'); leave();
+}
+function ensureRoundSubs(){
+  if (S.admin || !S.me) return;
+  const r = curRound(), k = S.me.id + ':' + r; if (k === roundKey) return; roundKey = k;
+  Object.values(roundSubs).forEach(u => u()); roundSubs = {};
+  S.counts = {}; S.myApps = {}; S.prevApps = {};
+  roundSubs.c = DB.on('counts/' + r, v => { S.counts = v || {}; onData(); });
+  roundSubs.a = DB.on(`apps/${r}/${S.me.id}`, v => { S.myApps = v || {}; onData(); });
+  if (r > 1) roundSubs.p = DB.on(`apps/${r - 1}/${S.me.id}`, v => { S.prevApps = v || {}; onData(); });
+}
+let rt = 0;
+function onData(){
+  cancelAnimationFrame(rt);
+  rt = requestAnimationFrame(() => {
+    if (S.view === 'student') renderStudent();
+    else if (S.view === 'admin'){
+      const ae = document.activeElement;
+      if (S.tab === 'config') return;
+      if (ae && ae.id === 'q') return;
+      renderAdmin();
+    }
+  });
+}
+
+/* ---------- 화면: 입장 ---------- */
+function renderEntry(){
+  S.view = 'entry';
+  $('#app').innerHTML = `
+  <div class="login card">
+    <h1>${esc(S.cfg ? S.cfg.title : '프로그램 신청')}</h1>
+    ${DB.mode === 'local' ? '<div class="banner b-wait">연습 모드 (Firebase 미연결) — 이 브라우저 안에서만 동작합니다</div>' : ''}
+    <p class="muted">학번과 이름을 입력하고 입장하세요.</p>
+    <div class="row" style="margin-bottom:8px"><input id="sid" class="grow" inputmode="numeric" placeholder="학번 (예: 10101)" autocomplete="off"></div>
+    <div class="row"><input id="sname" class="grow" placeholder="이름" autocomplete="off" onkeydown="if(event.key==='Enter')enter()"><button onclick="enter()">입장</button></div>
+    <div class="err" id="err">${esc(S.msg)}</div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+    <div class="row"><button class="sec sm" onclick="renderAdminLogin()">교사 로그인</button></div>
+  </div>`;
+  $('#sid').focus();
+}
+async function ensureAnon(){
+  try { await DB.signInAnon(); return true; }
+  catch(e){ S.msg = authErrMsg(e); return false; }
+}
+async function enter(){
+  const id = $('#sid').value.trim(), name = $('#sname').value.trim();
+  if (!/^\d{1,10}$/.test(id)){ S.msg = '학번은 숫자로 입력하세요.'; return renderEntry(); }
+  if (!name || name.length > 20){ S.msg = '이름을 입력하세요.'; return renderEntry(); }
+  if (!(await ensureAnon())) return renderEntry();
+  const mismatch = `학번 ${id}번은 다른 이름으로 이미 등록되어 있습니다. 학번과 이름을 다시 확인하세요. 이름이 맞는데도 안 되면 선생님께 말씀드리세요.`;
+  const rec = { id, name, uid: DB.uid(), joined: Date.now() };
+  try {
+    if (DB.mode === 'local'){
+      const ex = await DB.get('students/' + id);
+      if (ex && !sameName(ex.name, name)){ S.msg = mismatch; return renderEntry(); }
+      if (ex) rec.joined = ex.joined || rec.joined;
+    }
+    await DB.set('students/' + id, rec);   // 같은 학번+같은 이름이면 허용(다른 기기에서 재입장), 이름이 다르면 보안 규칙이 거부
+  } catch(e){
+    S.msg = (e && e.code === 'PERMISSION_DENIED') ? mismatch : '입장 중 오류: ' + (e.message || e);
+    return renderEntry();
+  }
+  S.me = { id, name }; S.msg = '';
+  localStorage.setItem('sel_v1_me', JSON.stringify(S.me));
+  enterStudent();
+}
+function enterStudent(){ S.view = 'student'; S.admin = false; kickedOnce = false; S.myApps = {}; S.prevApps = {}; S.counts = {}; startSubs(); renderStudent(); }
+async function leave(){
+  const wasAdmin = S.admin;
+  localStorage.removeItem('sel_v1_me'); sessionStorage.removeItem('sel_v1_admin');
+  S.me = null; S.admin = false; stopSubs(); S.msg = ''; S.view = 'entry';
+  if (wasAdmin && DB.mode === 'firebase'){ try { await DB.signOut(); } catch(e){} location.reload(); return; }
+  initPublic();
+}
+
+/* ---------- 화면: 학생 ---------- */
+function renderStudent(){
+  if (!S.me) return;
+  if (!S.cfg){ $('#app').innerHTML = '<div class="card">아직 교사가 설정을 마치지 않았습니다. 잠시 후 다시 확인하세요.</div>'; return; }
+  const r = curRound(), secs = sectors(), id = S.me.id, ended = S.state.ended, locked = S.state.locked;
+  const done = secs.filter(s => myItem(s.id, id)).length, left = secs.length - done;
+  let bn;
+  if (ended) bn = ['b-off', '신청이 종료되었습니다. 아래에서 내 결과를 확인하세요.'];
+  else if (locked) bn = ['b-wait', `${r}차 추첨 중… 잠시만 기다려주세요.`];
+  else if (left === 0) bn = ['b-on', '모든 섹터에 배정되었습니다. 🎉'];
+  else bn = ['b-on', `${r}차 신청 중 — 교사가 마감하면 자동으로 추첨됩니다.<br><span class="mini" style="font-weight:400">배정이 안 된 섹터 ${left}개에서 항목을 하나씩 고르세요. 신청은 마감 전까지 바꿀 수 있습니다.</span>`];
+  let h = `<div class="row"><h1 class="grow">${esc(S.cfg.title)}</h1><span class="muted">${esc(id)} ${esc(S.me.name)}</span><button class="sec sm" onclick="leave()">나가기</button></div>
+    <div class="banner ${bn[0]}">${bn[1]}</div>`;
+  if (r > 1 && !ended){
+    const lost = secs.filter(s => !myItem(s.id, id) && (S.prevApps || {})[s.id]);
+    if (lost.length) h += `<div class="card"><b>${r - 1}차 결과</b>${lost.map(s => `<div class="res bad">${esc(s.name)}: 이번에는 뽑히지 않았어요. ${r}차에서 다시 신청하세요.</div>`).join('')}</div>`;
+  }
+  h += `<div class="card"><b>내 배정</b> <span class="tag ${left === 0 ? 'ok' : ''}">${done}/${secs.length}</span>
+    <div style="margin-top:6px">${secs.map(s => { const i = myItem(s.id, id), it = i && findItem(s.id, i); return `<div>${esc(s.name)} : ${it ? '<b>' + esc(it.name) + '</b>' : '<span class="muted">미배정</span>'}</div>`; }).join('')}</div></div>`;
+  secs.forEach(s => {
+    const mine = myItem(s.id, id), picked = (S.myApps || {})[s.id];
+    h += `<div class="card"><h2>${esc(s.name)} ${mine ? '<span class="tag ok">배정 완료</span>' : ''}</h2><div class="items">`;
+    s.items.forEach(it => {
+      const have = takenN(s.id, it.id), cap = Number(it.cap), fr = Math.max(0, cap - have);
+      const applied = ((S.counts[s.id] || {})[it.id]) || 0;
+      const isMine = mine === it.id, sel = !mine && picked === it.id, comp = applied > fr && fr > 0;
+      let btn = '';
+      if (!mine && !ended){
+        if (sel) btn = `<button class="sm dan" ${locked ? 'disabled' : ''} onclick="doApply('${s.id}','${it.id}',true)">신청 취소</button>`;
+        else btn = `<button class="sm" ${(fr <= 0 || locked) ? 'disabled' : ''} onclick="doApply('${s.id}','${it.id}')">${fr <= 0 ? '정원 마감' : '신청'}</button>`;
+      }
+      h += `<div class="item ${isMine ? 'mine' : ''} ${sel ? 'sel' : ''} ${fr <= 0 && !isMine ? 'full' : ''}">
+        <b>${esc(it.name)}</b>${isMine ? '<span class="tag ok">내 선택</span>' : ''}${sel ? '<span class="tag">신청함</span>' : ''}
+        <div class="stat"><span>정원 <b>${cap}</b></span><span>남은 자리 <b>${fr}</b></span><span>${r}차 신청 <b>${applied}</b>명</span></div>
+        ${comp ? '<div class="mini"><span class="tag warn" style="margin:0">경쟁 중</span> 신청자가 남은 자리보다 많아요</div>' : ''}
+        <div style="margin-top:6px">${btn}</div></div>`;
+    });
+    h += '</div></div>';
+  });
+  $('#app').innerHTML = h;
+}
+async function doApply(sid, iid, cancel){
+  const x = await applyFor(S.me.id, sid, iid, cancel); if (!x.ok) alert(x.msg);
+}
+
+/* ---------- 화면: 교사 ---------- */
+function renderAdminLogin(){
+  S.view = 'adminlogin';
+  $('#app').innerHTML = `<div class="login card"><h2>교사 로그인</h2>
+    <p class="muted">${DB.mode === 'firebase' ? `교사 구글 계정(${esc(ADMIN_EMAIL)})으로 로그인하세요.` : '연습 모드에서는 바로 들어갑니다.'}</p>
+    <div class="row"><button onclick="adminLogin()">${DB.mode === 'firebase' ? '구글로 로그인' : '교사 화면 열기'}</button><button class="sec" onclick="leave()">돌아가기</button></div>
+    <div class="err" id="err">${esc(S.msg)}</div></div>`;
+}
+async function adminLogin(){
+  S.msg = '';
+  if (DB.mode === 'local'){ sessionStorage.setItem('sel_v1_admin', '1'); return enterAdmin(); }
+  try {
+    const u = await DB.signInGoogle();
+    if (!u.email || u.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()){
+      const em = u.email; await DB.signOut(); await ensureAnon();
+      S.msg = `교사 계정이 아닙니다 (${em}).`; return renderAdminLogin();
+    }
+    sessionStorage.setItem('sel_v1_admin', '1'); enterAdmin();
+  } catch(e){ S.msg = authErrMsg(e); renderAdminLogin(); }
+}
+function enterAdmin(){
+  S.admin = true; S.view = 'admin'; S.tab = 'status'; stopSubs(); startSubs();
+  setTimeout(() => { S.D = clone(S.cfg || defaultConfig()); renderAdmin(); }, 600);
+}
+function renderAdmin(){
+  const tabs = [['status', '현황·마감'], ['students', '학생'], ['config', '설정'], ['tools', '도구']];
+  let h = `<div class="row"><h1 class="grow">교사 화면 <span class="tag">${DB.mode === 'firebase' ? 'Firebase' : '연습 모드'}</span></h1><button class="sec sm" onclick="leave()">나가기</button></div>
+    <div class="tabs">${tabs.map(t => `<button class="${S.tab === t[0] ? 'on' : ''}" onclick="S.tab='${t[0]}';renderAdmin()">${t[1]}</button>`).join('')}</div>`;
+  h += ({ status: tabStatus, students: tabStudents, config: tabConfig, tools: tabTools }[S.tab])();
+  $('#app').innerHTML = h;
+  if (S.tab === 'tools') fillItems();
+}
+function appCount(r, sid, iid){
+  let n = 0; const a = S.apps[r] || {};
+  for (const id in a) if (S.students[id] && a[id] && a[id][sid] === iid) n++;
+  return n;
+}
+function tabStatus(){
+  if (!S.cfg) return '<div class="card">먼저 [설정] 탭에서 항목을 입력하고 저장하세요.</div>';
+  const r = curRound(), secs = sectors(), ids = Object.keys(S.students), a = S.apps[r] || {};
+  const applicants = ids.filter(i => a[i] && Object.keys(a[i]).length).length;
+  const unassignedAny = ids.filter(i => secs.some(s => !myItem(s.id, i))).length;
+  const log = S.log || {};
+  let h = `<div class="card">
+    <div class="banner ${S.state.ended ? 'b-off' : 'b-on'}" style="margin-bottom:10px">${S.state.ended ? '신청 종료됨' : `${r}차 신청 받는 중`}${S.state.locked ? ' <span class="tag warn">추첨 처리 중</span>' : ''}</div>
+    <div class="stat"><span>입장 학생 <b>${ids.length}</b>명</span><span>${r}차 신청한 학생 <b>${applicants}</b>명</span><span>미배정 섹터가 남은 학생 <b>${unassignedAny}</b>명</span></div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="closeRound()" ${(S.state.ended || S.state.locked) ? 'disabled' : ''}>${r}차 마감 · 추첨 실행</button>
+      <button class="sec" onclick="undoRound()" ${r > 1 ? '' : 'disabled'}>마지막 마감 취소</button>
+      <button class="sec" onclick="toggleEnded()">${S.state.ended ? '신청 다시 열기' : '신청 종료(결과 확정)'}</button>
+      ${S.state.locked ? '<button class="dan" onclick="unlock()">잠금 해제</button>' : ''}
+    </div>
+    ${(unassignedAny === 0 && ids.length) ? '<div class="muted" style="margin-top:6px">모든 학생이 모든 섹터에 배정되었습니다.</div>' : ''}
+  </div>`;
+  secs.forEach(s => {
+    h += `<div class="card"><h3>${esc(s.name)}</h3><table><tr><th>항목</th><th style="width:60px">정원</th><th style="width:60px">배정</th><th style="width:90px">${r}차 신청</th><th>배정 명단</th></tr>`;
+    s.items.forEach(it => { const m = members(s.id, it.id); h += `<tr><td>${esc(it.name)}</td><td>${it.cap}</td><td>${m.length}</td><td>${appCount(r, s.id, it.id)}</td><td class="names">${m.map(i => esc(nameOf(i))).join(', ')}</td></tr>`; });
+    h += '</table></div>';
+  });
+  const rs = Object.keys(log).map(Number).sort((x, y) => y - x);
+  if (rs.length) h += '<div class="card"><h2>추첨 기록</h2>' + rs.map(n => {
+    const l = log[n];
+    return `<h3>${n}차 결과 <span class="mini muted">${fmtTime(l.time)}</span></h3><table><tr><th>항목</th><th>신청</th><th>남은자리</th><th>선정</th><th>탈락</th></tr>` +
+      arr(l.rows).map(x => `<tr><td>${esc(x.item)}</td><td>${x.applicants}</td><td>${x.free}</td><td class="names">${arr(x.win).map(esc).join(', ')}</td><td class="names">${arr(x.lose).map(esc).join(', ')}</td></tr>`).join('') + '</table>';
+  }).join('<br>') + '</div>';
+  return h;
+}
+async function toggleEnded(){
+  if (S.state.ended){ await DB.set('state/ended', null); return; }
+  if (confirm('신청을 종료합니다. 학생들은 더 이상 신청할 수 없고 결과만 볼 수 있습니다. (다시 열 수 있습니다)')) await DB.set('state/ended', true);
+}
+async function unlock(){ if (confirm('잠금을 해제합니다. 추첨이 실제로 멈춘 경우에만 사용하세요.')) await DB.set('state/locked', null); }
+
+/* ---- 학생 탭 ---- */
+function studentRows(){
+  const secs = sectors(), q = S.q.trim();
+  const ids = Object.keys(S.students).filter(i => !q || i.includes(q) || S.students[i].name.includes(q)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return ids.slice(0, 500).map(i => {
+    const st = S.students[i];
+    return `<tr><td>${esc(i)}</td><td>${esc(st.name)}${st.test ? ' <span class="tag">가상</span>' : ''}</td>${secs.map(s => { const it = myItem(s.id, i); return `<td>${it ? esc(findItem(s.id, it).name) : '<span class="muted">-</span>'}</td>`; }).join('')}
+      <td style="white-space:nowrap"><button class="sec sm" onclick="editStudent('${i}')">수정</button> <button class="dan sm" onclick="delStudent('${i}')">삭제</button></td></tr>`;
+  }).join('');
+}
+function tabStudents(){
+  const secs = sectors(), n = Object.keys(S.students).length;
+  return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">입장한 학생 (${n}명)</h2>
+    <input id="q" placeholder="학번·이름 검색" value="${esc(S.q)}" oninput="S.q=this.value;$('#stbody').innerHTML=studentRows()"></div>
+    <div class="muted" style="margin:6px 0">학번 또는 이름을 잘못 입력한 학생은 [수정]으로 고칠 수 있습니다. 학번을 바꾸면 배정과 신청도 함께 옮겨집니다. 수정된 학생은 다시 입장해야 합니다.</div>
+    <div style="overflow-x:auto"><table><tr><th>학번</th><th>이름</th>${secs.map(s => `<th>${esc(s.name)}</th>`).join('')}<th></th></tr><tbody id="stbody">${studentRows()}</tbody></table></div>
+    ${n > 500 ? '<div class="muted">검색으로 좁혀 보세요. (500명까지 표시)</div>' : ''}</div>`;
+}
+async function editStudent(id){
+  const st = S.students[id]; if (!st) return;
+  const nn = prompt('이름 수정', st.name); if (nn === null) return;
+  const ni = prompt('학번 수정 (숫자)', id); if (ni === null) return;
+  const name = nn.trim(), nid = ni.trim();
+  if (!name || !/^\d{1,10}$/.test(nid)) return alert('이름과 숫자 학번을 확인하세요.');
+  if (nid === id){ await DB.update('students/' + id, { name }); return; }
+  if (S.students[nid]) return alert(`학번 ${nid}번은 이미 있습니다 (${S.students[nid].name}).`);
+  await DB.set('students/' + nid, { ...st, id: nid, name }); await DB.set('students/' + id, null);
+  for (const s of sectors()){
+    await DB.tx('assign/' + s.id, cur => { cur = cur || {}; for (const k in cur) if (cur[k] && cur[k][id] != null){ cur[k][nid] = cur[k][id]; delete cur[k][id]; } return cur; });
+  }
+  const apps = (await DB.get('apps')) || {};
+  for (const r in apps){ if (apps[r] && apps[r][id]){ await DB.set(`apps/${r}/${nid}`, apps[r][id]); await DB.set(`apps/${r}/${id}`, null); } }
+  await publish();
+}
+async function delStudent(id){
+  if (!confirm(`${id} ${nameOf(id)} 학생을 삭제합니다. 배정과 신청도 모두 지워집니다.`)) return;
+  for (const s of sectors()) await unassign(s.id, id);
+  const apps = (await DB.get('apps')) || {};
+  for (const r in apps) if (apps[r] && apps[r][id]) await DB.set(`apps/${r}/${id}`, null);
+  await DB.set('students/' + id, null);
+  await recomputeCounts(curRound()); await publish();
+}
+
+/* ---- 설정 탭 ---- */
+function tabConfig(){
+  const D = S.D = S.D || clone(S.cfg || defaultConfig());
+  let h = `<div class="card"><h2>기본</h2><label>제목 <input value="${esc(D.title)}" oninput="S.D.title=this.value"></label></div>`;
+  h += '<div class="card"><h2>섹터 / 항목 / 정원</h2><div class="muted" style="margin-bottom:8px">학생은 섹터마다 항목을 1개씩 배정받습니다. 섹터와 항목은 자유롭게 늘리고 줄일 수 있습니다.</div>';
+  arr(D.sectors).forEach((s, si) => {
+    h += `<div class="item" style="margin-bottom:10px"><div class="row"><input value="${esc(s.name)}" oninput="S.D.sectors[${si}].name=this.value" style="font-weight:700"><button class="dan sm" onclick="cfgDelSector(${si})">섹터 삭제</button></div>`;
+    arr(s.items).forEach((it, ii) => {
+      h += `<div class="row" style="margin-top:6px"><input class="grow" value="${esc(it.name)}" oninput="S.D.sectors[${si}].items[${ii}].name=this.value"><label>정원 <input type="number" min="1" style="width:70px" value="${it.cap}" oninput="S.D.sectors[${si}].items[${ii}].cap=Number(this.value)"></label><button class="dan sm" onclick="cfgDelItem(${si},${ii})">삭제</button></div>`;
+    });
+    h += `<div style="margin-top:6px"><button class="sec sm" onclick="cfgAddItem(${si})">+ 항목 추가</button></div></div>`;
+  });
+  h += '<button class="sec" onclick="cfgAddSector()">+ 섹터 추가</button></div>';
+  h += '<div class="row"><button onclick="cfgSave()">설정 저장</button><span class="muted">※ 신청이 시작된 뒤 항목을 삭제하거나 정원을 줄이면 기존 배정과 어긋날 수 있습니다.</span></div>';
+  return h;
+}
+const cfgDelSector = i => { S.D.sectors.splice(i, 1); renderAdmin(); };
+const cfgDelItem = (s, i) => { S.D.sectors[s].items.splice(i, 1); renderAdmin(); };
+const cfgAddItem = s => { S.D.sectors[s].items = arr(S.D.sectors[s].items); S.D.sectors[s].items.push({ id: uid('i'), name: '새 항목', cap: 3 }); renderAdmin(); };
+const cfgAddSector = () => { S.D.sectors = arr(S.D.sectors); S.D.sectors.push({ id: uid('s'), name: (S.D.sectors.length + 1) + '섹터', items: [{ id: uid('i'), name: '새 항목', cap: 3 }] }); renderAdmin(); };
+async function cfgSave(){
+  const D = S.D, warn = [];
+  for (const s of arr(D.sectors)) for (const it of arr(s.items)){
+    if (!(Number(it.cap) >= 1)) return alert(`"${it.name}"의 정원은 1 이상이어야 합니다.`);
+    const m = members(s.id, it.id).length; if (m > Number(it.cap)) warn.push(`${s.name}/${it.name}: 이미 ${m}명 배정 (정원 ${it.cap})`);
+  }
+  const keep = new Set(); arr(D.sectors).forEach(s => arr(s.items).forEach(i => keep.add(s.id + '|' + i.id)));
+  for (const sid in S.assign) for (const iid in S.assign[sid]) if (!keep.has(sid + '|' + iid) && members(sid, iid).length) warn.push(`삭제된 항목에 배정된 학생 ${members(sid, iid).length}명 있음`);
+  if (warn.length && !confirm('주의:\n' + warn.join('\n') + '\n\n그래도 저장할까요?')) return;
+  delete D.adminPw;
+  await DB.set('config', D); alert('저장했습니다.'); S.D = clone(D);
+}
+
+/* ---- 도구 탭 ---- */
+function tabTools(){
+  const secs = sectors();
+  return `<div class="card"><h2>수동 배정 / 제거</h2><div class="row">
+    <input id="mk" placeholder="학번" style="width:120px">
+    <select id="msec" onchange="fillItems()">${secs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
+    <select id="mit"></select>
+    <button onclick="manualAssign()">강제 배정</button><button class="dan" onclick="manualRemove()">이 섹터 배정 제거</button></div>
+    <div class="muted" style="margin-top:6px">강제 배정은 정원을 넘겨도 넣습니다. 이미 배정된 섹터는 먼저 제거하세요. 입장한 학생의 학번만 가능합니다.</div></div>
+  <div class="card"><h2>결과 내보내기</h2><button onclick="exportXlsx()">엑셀(xlsx) 다운로드</button> <span class="muted">학생별 / 항목별 / 미배정 시트</span></div>
+  <div class="card"><h2>시험(시뮬레이션)</h2>
+    <div class="row"><input id="sn" type="number" value="200" style="width:90px"><button class="sec" onclick="simCreate()">가상 학생 생성</button>
+    <button onclick="simApply()">현재 차수에 가상 신청 넣기</button><button class="dan" onclick="simClear()">가상 학생 삭제</button></div>
+    <div class="muted" style="margin-top:6px">실제 사용 전 점검용입니다. 가상 학생이 현재 차수에 한꺼번에 신청합니다. 점검 후에는 가상 학생을 삭제하고 아래 [초기화]를 하세요.</div></div>
+  <div class="card"><h2>초기화</h2><button class="dan" onclick="resetAll()">학생·배정·신청·추첨 기록 모두 초기화 (설정 유지)</button></div>`;
+}
+function fillItems(){
+  const sel = $('#msec'), it = $('#mit'); if (!sel || !it) return;
+  const s = sectors().find(x => x.id === sel.value); it.innerHTML = s ? s.items.map(i => `<option value="${i.id}">${esc(i.name)}</option>`).join('') : '';
+}
+async function manualAssign(){
+  const id = $('#mk').value.trim(); if (!S.students[id]) return alert('입장한 학생의 학번이 아닙니다.');
+  const x = await assignTx($('#msec').value, $('#mit').value, id, true);
+  if (x.ok) await publish();
+  alert(x.ok ? '배정했습니다.' : '이미 이 섹터에 배정되어 있습니다. 먼저 제거하세요.');
+}
+async function manualRemove(){ const id = $('#mk').value.trim(); if (!id) return alert('학번을 입력하세요.'); await unassign($('#msec').value, id); await publish(); alert('제거했습니다.'); }
+async function resetAll(){
+  if (!confirm('입장한 학생, 배정, 신청, 추첨 기록을 모두 지우고 1차부터 다시 시작합니다. (설정은 유지) 계속할까요?')) return;
+  for (const p of ['students', 'assign', 'apps', 'counts', 'state', 'log', 'taken', 'result']) await DB.set(p, null);
+  alert('초기화했습니다.');
+}
+function exportXlsx(){
+  if (typeof XLSX === 'undefined') return alert('엑셀 라이브러리를 불러오지 못했습니다.');
+  const secs = sectors(), ids = Object.keys(S.students).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const a = [['학번', '이름', ...secs.map(s => s.name)]];
+  ids.forEach(i => a.push([i, nameOf(i), ...secs.map(s => { const it = myItem(s.id, i); return it ? findItem(s.id, it).name : '미배정'; })]));
+  const b = [['섹터', '항목', '정원', '인원', '명단']];
+  secs.forEach(s => s.items.forEach(it => { const m = members(s.id, it.id); b.push([s.name, it.name, it.cap, m.length, m.map(i => nameOf(i) + '(' + i + ')').join(', ')]); }));
+  const c = [['학번', '이름', '미배정 섹터']];
+  ids.forEach(i => { const un = secs.filter(s => !myItem(s.id, i)).map(s => s.name); if (un.length) c.push([i, nameOf(i), un.join(', ')]); });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), '학생별');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b), '항목별');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(c), '미배정');
+  XLSX.writeFile(wb, '배정결과.xlsx');
+}
+async function simCreate(){
+  const n = Number($('#sn').value) || 200, up = {};
+  for (let i = 1; i <= n; i++){ const id = '9' + String(i).padStart(4, '0'); up[id] = { id, name: '가상' + i, uid: 'test', test: true, joined: Date.now() }; }
+  await DB.update('students', up); alert(n + '명 생성');
+}
+async function simApply(){
+  const test = Object.keys(S.students).filter(k => S.students[k].test), secs = sectors();
+  if (!test.length) return alert('가상 학생이 없습니다.');
+  const pick = a => a[Math.floor(Math.random() * a.length)]; let ok = 0;
+  for (const id of test) for (const s of secs){
+    if (myItem(s.id, id)) continue;
+    const its = s.items.filter(it => free(s.id, it) > 0); if (!its.length) continue;
+    const x = await applyFor(id, s.id, pick(its).id); if (x.ok) ok++;
+  }
+  alert('가상 신청 ' + ok + '건');
+}
+async function simClear(){
+  const test = Object.keys(S.students).filter(k => S.students[k].test); if (!test.length) return alert('가상 학생이 없습니다.');
+  if (!confirm(test.length + '명의 가상 학생과 그 배정·신청을 삭제할까요?')) return;
+  for (const s of sectors()) await DB.tx('assign/' + s.id, cur => { cur = cur || {}; for (const i in cur) test.forEach(k => { if (cur[i]) delete cur[i][k]; }); return cur; });
+  const apps = (await DB.get('apps')) || {};
+  for (const r in apps){ const u = {}; test.forEach(k => u[k] = null); await DB.update('apps/' + r, u); }
+  const u = {}; test.forEach(k => u[k] = null); await DB.update('students', u);
+  for (const r in apps) await recomputeCounts(r);
+  await publish();
+  alert('삭제했습니다.');
+}
+
+/* ---------- 시작 ---------- */
+function initPublic(){
+  stopSubs(); S.admin = false; S.view = 'entry';
+  subs.push(DB.on('config', v => { S.cfg = v; if (S.view === 'entry'){ const e = $('#sid'), n = $('#sname'); if (!e || (!e.value && !(n && n.value))) renderEntry(); } }));
+  renderEntry();
+}
+async function boot(){
+  let cfg = FIREBASE_CONFIG;
+  if (location.protocol === 'file:') cfg = null;   // 파일을 그냥 열면 연습 모드 (로그인 기능은 웹 주소에서만 가능)
+  DB.init(cfg);
+  const flag = sessionStorage.getItem('sel_v1_admin');
+  if (DB.mode === 'firebase'){
+    try { await DB.authReady(); } catch(e){}
+    const u = DB.user();
+    if (flag && u && !u.isAnonymous && (u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()) return enterAdmin();
+    if (u && !u.isAnonymous){ try { await DB.signOut(); } catch(e){} }   // 교사 로그인이 남아 있으면 학생 모드로 돌릴 때 정리
+    sessionStorage.removeItem('sel_v1_admin');
+    await ensureAnon();
+  } else if (flag) return enterAdmin();
+  let me = null; try { me = JSON.parse(localStorage.getItem('sel_v1_me')); } catch(e){}
+  if (me && me.id){
+    try {
+      const st = await DB.get('students/' + me.id);
+      if (st){ S.me = { id: st.id, name: st.name }; return enterStudent(); }
+    } catch(e){ /* 다른 기기/삭제 등으로 내 기록을 읽을 수 없으면 다시 입장 */ }
+    localStorage.removeItem('sel_v1_me');
+  }
+  initPublic();
+}
+boot();
+</script>
+</body>
+</html>
