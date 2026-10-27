@@ -163,7 +163,7 @@ const DB = (() => {
 })();
 
 /* ---------- 상태 ---------- */
-const S = { cfg: null, assign: {}, state: {}, counts: {}, taken: {}, myResult: {}, log: {}, students: {}, apps: {}, myApps: {}, prevApps: {}, entryMode: 'free', gUser: null, me: null, admin: false, tab: 'status', view: 'entry', msg: '', D: null, q: '' };
+const S = { cfg: null, assign: {}, state: {}, counts: {}, taken: {}, myResult: {}, log: {}, students: {}, apps: {}, myApps: {}, prevApps: {}, entryMode: 'free', gUser: null, sel: new Set(), me: null, admin: false, tab: 'status', view: 'entry', msg: '', D: null, q: '' };
 let subs = [], roundSubs = {}, roundKey = '', kickedOnce = false;
 
 function defaultConfig(){
@@ -339,7 +339,7 @@ function onData(){
     else if (S.view === 'admin'){
       const ae = document.activeElement;
       if (S.tab === 'config') return;
-      if (ae && ae.id === 'q') return;
+      if (ae && (ae.id === 'q' || (ae.classList && ae.classList.contains('keep')))) return;
       renderAdmin();
     }
   });
@@ -574,16 +574,23 @@ function studentRows(){
   const ids = Object.keys(S.students).filter(i => !q || i.includes(q) || S.students[i].name.includes(q)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   return ids.slice(0, 500).map(i => {
     const st = S.students[i];
-    return `<tr><td>${esc(i)}</td><td>${esc(st.name)}${st.test ? ' <span class="tag">가상</span>' : ''}</td><td class="muted">${st.email ? esc(st.email) : '-'}</td>${secs.map(s => { const it = myItem(s.id, i); return `<td>${it ? esc(findItem(s.id, it).name) : '<span class="muted">-</span>'}</td>`; }).join('')}
+    return `<tr><td><input type="checkbox" ${S.sel.has(i) ? 'checked' : ''} onchange="toggleSel('${i}',this.checked)"></td><td>${esc(i)}</td><td>${esc(st.name)}${st.test ? ' <span class="tag">가상</span>' : ''}${st.added ? ' <span class="tag">교사추가</span>' : ''}</td><td class="muted">${st.email ? esc(st.email) : '-'}</td>${secs.map(s => { const it = myItem(s.id, i); return `<td>${it ? esc(findItem(s.id, it).name) : '<span class="muted">-</span>'}</td>`; }).join('')}
       <td style="white-space:nowrap"><button class="sec sm" onclick="editStudent('${i}')">수정</button> ${st.email ? `<button class="sec sm" onclick="unlinkStudent('${i}')">계정 해제</button> ` : ''}<button class="dan sm" onclick="delStudent('${i}')">삭제</button></td></tr>`;
   }).join('');
 }
 function tabStudents(){
   const secs = sectors(), n = Object.keys(S.students).length;
   return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">입장한 학생 (${n}명)</h2>
-    <input id="q" placeholder="학번·이름 검색" value="${esc(S.q)}" oninput="S.q=this.value;$('#stbody').innerHTML=studentRows()"></div>
+    <input id="q" class="keep" placeholder="학번·이름 검색" value="${esc(S.q)}" oninput="S.q=this.value;$('#stbody').innerHTML=studentRows()"></div>
+    <div class="row" style="margin:6px 0"><span class="muted grow" id="selinfo">${S.sel.size ? S.sel.size + '명 선택됨' : '체크박스로 여러 명을 선택할 수 있습니다 (맨 위 칸 = 보이는 학생 모두 선택)'}</span><button class="dan sm" id="selbtn" onclick="delSelected()" ${S.sel.size ? '' : 'disabled'}>선택 삭제 (${S.sel.size}명)</button></div>
+    <details style="margin:6px 0"><summary><b>학생 직접 추가</b> (입장하지 않은 학생도 등록·배정 가능)</summary>
+      <div class="row" style="margin:8px 0"><input id="ans" class="keep" inputmode="numeric" placeholder="학번" style="width:110px"><input id="anm" class="keep grow" placeholder="이름" onkeydown="if(event.key==='Enter')addStudent()"><button onclick="addStudent()">추가</button></div>
+      <div class="muted">여러 명은 한 줄에 한 명씩 붙여넣으세요 (예: <code>10101 홍길동</code>). 엑셀에서 학번·이름 두 열을 복사해 붙여넣어도 됩니다.</div>
+      <textarea id="abulk" class="keep" rows="4" style="width:100%;margin-top:6px" placeholder="10101 홍길동&#10;10102 김철수"></textarea>
+      <div class="row" style="margin-top:6px"><button class="sec" onclick="addBulk()">붙여넣은 학생 모두 추가</button></div>
+      <div class="muted" style="margin-top:6px">배정은 [도구] 탭의 수동 배정에서 합니다. 이후 그 학생이 같은 학번·이름으로 입장하면 같은 학생으로 이어집니다.</div></details>
     <div class="muted" style="margin:6px 0">학번 또는 이름을 잘못 입력한 학생은 [수정]으로 고칠 수 있습니다. 학번을 바꾸면 배정과 신청도 함께 옮겨집니다. 수정된 학생은 다시 입장해야 합니다.</div>
-    <div style="overflow-x:auto"><table><tr><th>학번</th><th>이름</th><th>구글 계정</th>${secs.map(s => `<th>${esc(s.name)}</th>`).join('')}<th></th></tr><tbody id="stbody">${studentRows()}</tbody></table></div>
+    <div style="overflow-x:auto"><table><tr><th><input type="checkbox" id="selall" onchange="selAll(this.checked)" title="보이는 학생 모두 선택"></th><th>학번</th><th>이름</th><th>구글 계정</th>${secs.map(s => `<th>${esc(s.name)}</th>`).join('')}<th></th></tr><tbody id="stbody">${studentRows()}</tbody></table></div>
     ${n > 500 ? '<div class="muted">검색으로 좁혀 보세요. (500명까지 표시)</div>' : ''}</div>`;
 }
 async function editStudent(id){
@@ -603,6 +610,51 @@ async function editStudent(id){
   for (const r in apps){ if (apps[r] && apps[r][id]){ await DB.set(`apps/${r}/${nid}`, apps[r][id]); await DB.set(`apps/${r}/${id}`, null); } }
   await publish();
 }
+/* ---- 선택 삭제 / 학생 추가 ---- */
+const visibleIds = () => { const q = S.q.trim(); return Object.keys(S.students).filter(i => !q || i.includes(q) || S.students[i].name.includes(q)).slice(0, 500); };
+function selUpdate(){
+  const n = S.sel.size, b = $('#selbtn'), t = $('#selinfo'), a = $('#selall');
+  if (b){ b.disabled = !n; b.textContent = `선택 삭제 (${n}명)`; }
+  if (t) t.textContent = n ? n + '명 선택됨' : '체크박스로 여러 명을 선택할 수 있습니다 (맨 위 칸 = 보이는 학생 모두 선택)';
+  if (a){ const v = visibleIds(); a.checked = v.length > 0 && v.every(i => S.sel.has(i)); }
+}
+function toggleSel(id, on){ if (on) S.sel.add(id); else S.sel.delete(id); selUpdate(); }
+function selAll(on){ visibleIds().forEach(i => on ? S.sel.add(i) : S.sel.delete(i)); const b = $('#stbody'); if (b) b.innerHTML = studentRows(); selUpdate(); }
+async function delSelected(){
+  const ids = [...S.sel].filter(i => S.students[i]); if (!ids.length) return;
+  if (!confirm(`선택한 ${ids.length}명을 삭제합니다. 배정과 신청도 모두 지워집니다. 되돌릴 수 없습니다.\n계속할까요?`)) return;
+  const set = new Set(ids), o = {};
+  for (const s of sectors()){
+    await DB.tx('assign/' + s.id, cur => { cur = cur || {}; for (const k in cur) if (cur[k]) for (const i of set) delete cur[k][i]; return cur; });
+  }
+  const apps = (await DB.get('apps')) || {};
+  for (const r in apps) for (const i of set) if (apps[r] && apps[r][i]) o[`apps/${r}/${i}`] = null;
+  for (const i of set){ const st = S.students[i]; o['students/' + i] = null; o['result/' + i] = null; if (st && st.email && st.uid) o['acct/' + st.uid] = null; }
+  await DB.update('', o);
+  S.sel.clear();
+  await recomputeCounts(curRound()); await publish();
+  renderAdmin();
+}
+async function addStudents(list){
+  const o = {}, dup = [], bad = [];
+  for (const [id, name] of list){
+    if (!/^\d{1,10}$/.test(id) || !name || name.length > 20){ bad.push(`${id} ${name}`); continue; }
+    if (S.students[id] || o['students/' + id]){ dup.push(id); continue; }
+    o['students/' + id] = { id, name, uid: 'teacher', added: true, joined: Date.now() };
+  }
+  const n = Object.keys(o).length; if (n) await DB.update('', o);
+  alert(`${n}명 추가했습니다.` + (dup.length ? `\n이미 있는 학번(건너뜀): ${dup.join(', ')}` : '') + (bad.length ? `\n형식 오류(건너뜀): ${bad.join(' / ')}` : ''));
+  return n;
+}
+async function addStudent(){
+  const id = $('#ans').value.trim(), name = $('#anm').value.trim();
+  if (await addStudents([[id, name]])){ $('#ans').value = ''; $('#anm').value = ''; $('#ans').focus(); }
+}
+async function addBulk(){
+  const list = $('#abulk').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => { const m = l.split(/[\t,\s]+/); return [m[0], m.slice(1).join(' ')]; });
+  if (!list.length) return alert('붙여넣은 내용이 없습니다.');
+  if (await addStudents(list)) $('#abulk').value = '';
+}
 async function unlinkStudent(id){
   const st = S.students[id]; if (!st || !st.email) return;
   if (!confirm(`${id} ${st.name} 학생의 구글 계정(${st.email}) 연결을 해제합니다.\n배정·신청 기록은 유지되고, 학생은 다시 로그인해 학번을 연결해야 합니다.`)) return;
@@ -611,6 +663,7 @@ async function unlinkStudent(id){
   await DB.update('', o);
 }
 async function delStudent(id){
+  S.sel.delete(id);
   if (!confirm(`${id} ${nameOf(id)} 학생을 삭제합니다. 배정과 신청도 모두 지워집니다.`)) return;
   for (const s of sectors()) await unassign(s.id, id);
   const apps = (await DB.get('apps')) || {};
@@ -633,6 +686,10 @@ function tabConfig(){
     <label style="display:block"><input type="radio" name="em" ${S.entryMode === 'school' ? 'checked' : ''} onchange="setEntryMode('school')"> <b>학교 구글 로그인</b> — @${esc(SCHOOL_DOMAIN)} 계정으로만 입장, 계정 1개 = 학번 1개</label>
     ${DB.mode === 'local' ? '<div class="muted" style="margin-top:6px">※ 연습 모드에서는 로그인이 동작하지 않아 항상 자유 입력으로 보입니다.</div>' : ''}
     ${S.entryMode === 'school' ? '<div class="muted" style="margin-top:6px">자유 입력으로 이미 들어온 학생은 기록은 그대로이지만, 학교 계정으로 다시 로그인해야 신청할 수 있습니다.</div>' : ''}</div>`;
+  h += `<div class="card"><h2>엑셀로 한꺼번에 입력</h2>
+    <div class="muted" style="margin-bottom:8px">열 순서: <b>섹터 | 항목 | 정원</b> (첫 줄은 제목 줄). 섹터 칸이 비어 있으면 위 줄의 섹터로 봅니다. 올리면 아래 입력칸이 채워지며, <b>[설정 저장]을 눌러야 적용</b>됩니다. 이름이 같은 섹터·항목은 기존 배정이 유지됩니다.</div>
+    <div class="row"><button class="sec" onclick="cfgTemplate()">양식 내려받기</button>
+    <label class="sec" style="display:inline-block;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--line)">엑셀 올리기<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="cfgUpload(this)"></label></div></div>`;
   h += '<div class="card"><h2>섹터 / 항목 / 정원</h2><div class="muted" style="margin-bottom:8px">학생은 섹터마다 항목을 1개씩 배정받습니다. 섹터와 항목은 자유롭게 늘리고 줄일 수 있습니다.</div>';
   arr(D.sectors).forEach((s, si) => {
     h += `<div class="item" style="margin-bottom:10px"><div class="row"><input value="${esc(s.name)}" oninput="S.D.sectors[${si}].name=this.value" style="font-weight:700"><button class="dan sm" onclick="cfgDelSector(${si})">섹터 삭제</button></div>`;
@@ -649,6 +706,35 @@ const cfgDelSector = i => { S.D.sectors.splice(i, 1); renderAdmin(); };
 const cfgDelItem = (s, i) => { S.D.sectors[s].items.splice(i, 1); renderAdmin(); };
 const cfgAddItem = s => { S.D.sectors[s].items = arr(S.D.sectors[s].items); S.D.sectors[s].items.push({ id: uid('i'), name: '새 항목', cap: 3 }); renderAdmin(); };
 const cfgAddSector = () => { S.D.sectors = arr(S.D.sectors); S.D.sectors.push({ id: uid('s'), name: (S.D.sectors.length + 1) + '섹터', items: [{ id: uid('i'), name: '새 항목', cap: 3 }] }); renderAdmin(); };
+function cfgTemplate(){
+  const rows = [['섹터', '항목', '정원'], ['1섹터', '항목 A', 3], ['1섹터', '항목 B', 3], ['2섹터', '항목 C', 2], ['2섹터', '항목 D', 2]];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '항목');
+  XLSX.writeFile(wb, '섹터_항목_정원_양식.xlsx');
+}
+async function cfgUpload(inp){
+  const f = inp.files && inp.files[0]; if (!f) return; inp.value = '';
+  try {
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    const old = sectors(), secs = [], errs = []; let last = null, n = 0;
+    rows.forEach((r, ri) => {
+      const a = String(r[0] == null ? '' : r[0]).trim(), b = String(r[1] == null ? '' : r[1]).trim(), c = r[2];
+      if (!a && !b && (c === '' || c == null)) return;
+      if (ri === 0 && (/섹터/.test(a) || /항목/.test(b)) && !(Number(c) >= 1)) return;   // 제목 줄
+      const sn = a || last; if (!sn || !b){ errs.push(`${ri + 1}행: 섹터·항목 이름이 비어 있음`); return; }
+      const cap = Math.floor(Number(c)); if (!(cap >= 1)){ errs.push(`${ri + 1}행: 정원은 1 이상의 숫자여야 함`); return; }
+      last = sn;
+      let sec = secs.find(x => x.name === sn);
+      if (!sec){ const o = old.find(x => x.name === sn); sec = { id: o ? o.id : uid('s'), name: sn, items: [] }; secs.push(sec); }
+      if (sec.items.some(x => x.name === b)){ errs.push(`${ri + 1}행: ${sn}/${b} 중복`); return; }
+      const os = old.find(x => x.name === sn), oi = os && os.items.find(x => x.name === b);
+      sec.items.push({ id: oi ? oi.id : uid('i'), name: b, cap }); n++;
+    });
+    if (!secs.length) return alert('읽을 수 있는 줄이 없습니다. 양식(섹터 | 항목 | 정원)을 확인하세요.' + (errs.length ? '\n' + errs.slice(0, 5).join('\n') : ''));
+    S.D = S.D || clone(S.cfg || defaultConfig()); S.D.sectors = secs; renderAdmin();
+    alert(`섹터 ${secs.length}개, 항목 ${n}개를 불러왔습니다.\n내용을 확인하고 맨 아래 [설정 저장]을 누르세요.` + (errs.length ? `\n\n건너뛴 줄 ${errs.length}개:\n` + errs.slice(0, 8).join('\n') : ''));
+  } catch(e){ alert('엑셀을 읽지 못했습니다: ' + (e.message || e)); }
+}
 async function cfgSave(){
   const D = S.D, warn = [];
   for (const s of arr(D.sectors)) for (const it of arr(s.items)){
