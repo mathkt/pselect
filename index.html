@@ -75,6 +75,8 @@ const FIREBASE_CONFIG = {
   appId: "1:27421754864:web:da3b040080f4d58089c935"
 };
 const ADMIN_HINT = 'g*****@n*****';   // 로그인 화면에 보이는 안내용 문구 (실제 교사 이메일은 보안 규칙에만 있음)
+const EXAMPLE_ID = '1131';   // 입력창 예시 학번 — 학생이 그대로 입력하면 안내
+const EXAMPLE_MSG = '1131은 예시입니다. 본인 학번을 넣으세요.';
 const SCHOOL_DOMAIN = 'onchun.ms.kr';   // 학교 로그인 모드에서 허용할 이메일 도메인 (보안 규칙에도 같은 값이 있음)
 const isSchoolEmail = e => !!e && String(e).toLowerCase().endsWith('@' + SCHOOL_DOMAIN);
 const maskEmail = e => { const [u, d] = String(e || '').split('@'); return u && d ? u[0] + '*****@' + d[0] + '*****' : '(알 수 없음)'; };
@@ -357,7 +359,7 @@ function renderEntry(){
     const pre = String(S.gUser.email).split('@')[0];
     $('#app').innerHTML = `<div class="login card">${head}
       <p class="muted"><b>${esc(S.gUser.email)}</b> 로 로그인되었습니다.<br>처음 한 번만 학번과 이름을 입력하세요. 이 구글 계정은 입력한 학번에 연결됩니다.</p>
-      <div class="row" style="margin-bottom:8px"><input id="sid" class="grow" inputmode="numeric" placeholder="학번 (예: 10101)" value="${/^\d{1,10}$/.test(pre) ? esc(pre) : ''}" autocomplete="off"></div>
+      <div class="row" style="margin-bottom:8px"><input id="sid" class="grow" inputmode="numeric" placeholder="학번 (예: 1131)" value="${/^\d{1,10}$/.test(pre) && pre !== EXAMPLE_ID ? esc(pre) : ''}" autocomplete="off"></div>
       <div class="row"><input id="sname" class="grow" placeholder="이름" autocomplete="off" onkeydown="if(event.key==='Enter')enterSchool()"><button onclick="enterSchool()">입장</button></div>
       <div class="row" style="margin-top:8px"><button class="sec sm" onclick="schoolCancel()">다른 계정으로</button></div>${foot}</div>`;
     return;
@@ -371,7 +373,7 @@ function renderEntry(){
   $('#app').innerHTML = `
   <div class="login card">${head}
     <p class="muted">학번과 이름을 입력하고 입장하세요.</p>
-    <div class="row" style="margin-bottom:8px"><input id="sid" class="grow" inputmode="numeric" placeholder="학번 (예: 10101)" autocomplete="off"></div>
+    <div class="row" style="margin-bottom:8px"><input id="sid" class="grow" inputmode="numeric" placeholder="학번 (예: 1131)" autocomplete="off"></div>
     <div class="row"><input id="sname" class="grow" placeholder="이름" autocomplete="off" onkeydown="if(event.key==='Enter')enter()"><button onclick="enter()">입장</button></div>${foot}
   </div>`;
   $('#sid').focus();
@@ -398,6 +400,7 @@ async function schoolLogin(){
 async function enterSchool(){
   const id = $('#sid').value.trim(), name = $('#sname').value.trim();
   if (!/^\d{1,10}$/.test(id)){ S.msg = '학번은 숫자로 입력하세요.'; return renderEntry(); }
+  if (id === EXAMPLE_ID){ S.msg = EXAMPLE_MSG; return renderEntry(); }
   if (!name || name.length > 20){ S.msg = '이름을 입력하세요.'; return renderEntry(); }
   const u = DB.user();
   if (!u || u.isAnonymous || !isSchoolEmail(u.email)){ S.gUser = null; S.msg = '로그인이 풀렸습니다. 다시 로그인하세요.'; return renderEntry(); }
@@ -421,6 +424,7 @@ async function ensureAnon(){
 async function enter(){
   const id = $('#sid').value.trim(), name = $('#sname').value.trim();
   if (!/^\d{1,10}$/.test(id)){ S.msg = '학번은 숫자로 입력하세요.'; return renderEntry(); }
+  if (id === EXAMPLE_ID){ S.msg = EXAMPLE_MSG; return renderEntry(); }
   if (!name || name.length > 20){ S.msg = '이름을 입력하세요.'; return renderEntry(); }
   if (!(await ensureAnon())) return renderEntry();
   const mismatch = `학번 ${id}번은 다른 이름으로 이미 등록되어 있습니다. 학번과 이름을 다시 확인하세요. 이름이 맞는데도 안 되면 선생님께 말씀드리세요.`;
@@ -585,8 +589,8 @@ function tabStudents(){
     <div class="row" style="margin:6px 0"><span class="muted grow" id="selinfo">${S.sel.size ? S.sel.size + '명 선택됨' : '체크박스로 여러 명을 선택할 수 있습니다 (맨 위 칸 = 보이는 학생 모두 선택)'}</span><button class="dan sm" id="selbtn" onclick="delSelected()" ${S.sel.size ? '' : 'disabled'}>선택 삭제 (${S.sel.size}명)</button></div>
     <details style="margin:6px 0"><summary><b>학생 직접 추가</b> (입장하지 않은 학생도 등록·배정 가능)</summary>
       <div class="row" style="margin:8px 0"><input id="ans" class="keep" inputmode="numeric" placeholder="학번" style="width:110px"><input id="anm" class="keep grow" placeholder="이름" onkeydown="if(event.key==='Enter')addStudent()"><button onclick="addStudent()">추가</button></div>
-      <div class="muted">여러 명은 한 줄에 한 명씩 붙여넣으세요 (예: <code>10101 홍길동</code>). 엑셀에서 학번·이름 두 열을 복사해 붙여넣어도 됩니다.</div>
-      <textarea id="abulk" class="keep" rows="4" style="width:100%;margin-top:6px" placeholder="10101 홍길동&#10;10102 김철수"></textarea>
+      <div class="muted">여러 명은 한 줄에 한 명씩 붙여넣으세요 (예: <code>1131 홍길동</code>). 엑셀에서 학번·이름 두 열을 복사해 붙여넣어도 됩니다.</div>
+      <textarea id="abulk" class="keep" rows="4" style="width:100%;margin-top:6px" placeholder="1131 홍길동&#10;1132 김철수"></textarea>
       <div class="row" style="margin-top:6px"><button class="sec" onclick="addBulk()">붙여넣은 학생 모두 추가</button></div>
       <div class="muted" style="margin-top:6px">배정은 [도구] 탭의 수동 배정에서 합니다. 이후 그 학생이 같은 학번·이름으로 입장하면 같은 학생으로 이어집니다.</div></details>
     <div class="muted" style="margin:6px 0">학번 또는 이름을 잘못 입력한 학생은 [수정]으로 고칠 수 있습니다. 학번을 바꾸면 배정과 신청도 함께 옮겨집니다. 수정된 학생은 다시 입장해야 합니다.</div>
